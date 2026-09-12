@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Webiome</title>
+    <meta name="title" content="Webiome" />
+    <meta name="description" content="A browser-local agent workspace for files, docs, JavaScript, media processing, and live web outputs." />
+    <meta name="theme-color" content="#111111" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Webiome" />
+    <meta property="og:description" content="A browser-local agent workspace for files, docs, JavaScript, media processing, and live web outputs." />
+    <meta property="og:image" content="https://theabbie.github.io/webiome/assets/og-image-20260912.png" />
+    <meta property="og:url" content="https://theabbie.github.io/webiome/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Webiome" />
+    <meta name="twitter:description" content="A browser-local agent workspace for files, docs, JavaScript, media processing, and live web outputs." />
+    <meta name="twitter:image" content="https://theabbie.github.io/webiome/assets/og-image-20260912.png" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #111;
+        color: #ddd;
+        font-family: "Courier New", Courier, monospace;
+        overflow: hidden;
+      }
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+      button {
+        border: 1px solid rgba(255, 255, 255, 0.58);
+        border-radius: 7px;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.88);
+        cursor: pointer;
+        padding: 8px 12px;
+        line-height: 1;
+      }
+      input::file-selector-button {
+        border: 1px solid rgba(255, 255, 255, 0.58);
+        border-radius: 7px;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.88);
+        cursor: pointer;
+        padding: 8px 12px;
+        font: inherit;
+      }
+      button:hover,
+      button:focus,
+      input::file-selector-button:hover {
+        border-color: rgba(255, 255, 255, 0.95);
+        color: white;
+      }
+      button:disabled {
+        cursor: default;
+        opacity: 0.48;
+      }
+      #webiome {
+        height: 100vh;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+      }
+      .bar {
+        display: grid;
+        grid-template-columns: auto 1fr auto auto;
+        gap: 14px;
+        align-items: center;
+        padding: 16px 18px;
+        color: #909090;
+        font-weight: bold;
+        border-bottom: 1px solid #222;
+      }
+      .brand {
+        color: white;
+        letter-spacing: 0;
+        font-size: 20px;
+        display: inline-grid;
+        grid-template-columns: auto auto;
+        align-items: center;
+        gap: 10px;
+      }
+      .brand-mark {
+        width: 25px;
+        height: 25px;
+      }
+      .action {
+        transition: 0.1s border-color, 0.1s color;
+        white-space: nowrap;
+      }
+      .icon-action {
+        width: 36px;
+        height: 36px;
+        justify-self: end;
+        border: 0;
+        padding: 0;
+        display: grid;
+        place-items: center;
+        color: white;
+        opacity: 0.84;
+      }
+      .icon-action:hover,
+      .icon-action:focus {
+        opacity: 1;
+      }
+      .icon-action svg {
+        width: 26px;
+        height: 26px;
+        stroke: currentColor;
+        stroke-width: 3.1;
+        stroke-linecap: round;
+      }
+      .auth-action {
+        justify-self: end;
+        font-size: 12px;
+        color: #bbb;
+      }
+      .auth-action[hidden] {
+        display: none;
+      }
+      .stage {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+      }
+      .transcript {
+        overflow: auto;
+        padding: 20px;
+      }
+      .event {
+        display: grid;
+        grid-template-columns: 110px minmax(0, 1fr);
+        gap: 18px;
+        padding: 12px 0;
+        border-bottom: 1px solid #1d1d1d;
+        transition: 0.12s background;
+      }
+      .event:hover {
+        background: rgba(255, 255, 255, 0.025);
+      }
+      .role {
+        color: #777;
+        font-weight: bold;
+      }
+      .content {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        line-height: 1.45;
+      }
+      .side {
+        border-left: 1px solid #222;
+        overflow: auto;
+        color: #909090;
+      }
+      .side summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 18px 18px 12px;
+        color: white;
+        font-size: 16px;
+        font-weight: bold;
+      }
+      .side summary::-webkit-details-marker {
+        display: none;
+      }
+      .side summary::after {
+        content: "+";
+        float: right;
+        color: #aaa;
+      }
+      .side[open] summary::after {
+        content: "-";
+      }
+      .tools-list {
+        padding: 0 18px 18px;
+      }
+      .tool {
+        padding: 12px 0;
+        border-bottom: 1px solid #222;
+      }
+      .tool strong {
+        display: block;
+        color: #ddd;
+        margin-bottom: 6px;
+      }
+      .tool span {
+        display: block;
+        line-height: 1.35;
+      }
+      .composer {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+        padding: 16px 18px;
+        border-top: 1px solid #222;
+      }
+      .composer-status {
+        grid-column: 1 / -1;
+        min-height: 18px;
+        color: #777;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+      }
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #575757;
+      }
+      .composer-status[data-state="active"] .status-dot {
+        background: #fff;
+        box-shadow: 0 0 12px rgba(255, 255, 255, 0.65);
+        animation: webiome-pulse 1s ease-in-out infinite;
+      }
+      @keyframes webiome-pulse {
+        0%,
+        100% {
+          opacity: 0.42;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+      .prompt {
+        width: 100%;
+        height: 42px;
+        min-height: 42px;
+        max-height: 160px;
+        resize: none;
+        overflow-y: hidden;
+        border: 1px solid #282828;
+        border-radius: 7px;
+        outline: 0;
+        color: white;
+        background: #181818;
+        padding: 10px 12px;
+        line-height: 20px;
+      }
+      .html-input form {
+        display: grid;
+        gap: 10px;
+        max-width: 680px;
+      }
+      .html-input label {
+        display: grid;
+        gap: 6px;
+      }
+      .html-input input,
+      .html-input textarea,
+      .html-input select {
+        width: 100%;
+        border: 0;
+        outline: 0;
+        color: white;
+        background: #181818;
+        padding: 10px 12px;
+      }
+      .html-submit {
+        justify-self: start;
+      }
+      .artifact {
+        display: grid;
+        gap: 10px;
+      }
+      .artifact a {
+        color: white;
+      }
+      .artifact-preview {
+        max-width: min(100%, 680px);
+        max-height: 420px;
+        background: #181818;
+      }
+      .live-output {
+        display: grid;
+        gap: 10px;
+      }
+      .live-output-title {
+        color: #bbb;
+      }
+      .live-output-root {
+        width: min(100%, 960px);
+        min-height: 320px;
+        background: #000;
+        overflow: hidden;
+      }
+      .tool-result {
+        border: 1px solid #2a2a2a;
+        border-radius: 7px;
+        padding: 10px 12px;
+      }
+      .tool-result summary {
+        cursor: pointer;
+        color: #bbb;
+      }
+      .tool-result pre {
+        margin: 12px 0 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        color: #ddd;
+      }
+      @media only screen and (max-width: 860px) {
+        body {
+          overflow: auto;
+        }
+        #webiome {
+          min-height: 100vh;
+          height: auto;
+        }
+        .bar,
+        .composer,
+        .stage {
+          grid-template-columns: 1fr;
+        }
+        .stage {
+          min-height: 60vh;
+          display: flex;
+          flex-direction: column;
+        }
+        .side {
+          order: -1;
+          border-left: 0;
+          border-top: 1px solid #222;
+          border-bottom: 1px solid #222;
+          max-height: 42vh;
+        }
+        .transcript {
+          min-height: 54vh;
+        }
+        .event {
+          grid-template-columns: 1fr;
+          gap: 6px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="webiome">
+      <header class="bar">
+        <div class="brand">
+          <img class="brand-mark" src="assets/icon.svg" alt="" />
+          <span>WEBIOME</span>
+        </div>
+        <div></div>
+        <button class="action auth-action" data-testid="auth" hidden>SIGN IN</button>
+        <button class="icon-action" data-testid="new-session" aria-label="New session">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14"></path>
+            <path d="M5 12h14"></path>
+          </svg>
+        </button>
+      </header>
+      <section class="stage">
+        <div class="transcript" data-testid="transcript"></div>
+        <details class="side" data-testid="tools-panel">
+          <summary>TOOLS</summary>
+          <div class="tools-list" data-testid="tools"></div>
+        </details>
+      </section>
+      <form class="composer" data-testid="composer">
+        <div class="composer-status" data-testid="status" data-state="ready">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span data-status-text>ready</span>
+        </div>
+        <textarea class="prompt" data-testid="prompt" placeholder="Ask the browser agent"></textarea>
+        <button class="action" data-testid="send">SEND</button>
+      </form>
+    </main>
+    <script type="module">
+%%WEBIOME_BUNDLE%%
+    </script>
+  </body>
+</html>

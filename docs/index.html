@@ -1,0 +1,1573 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Webiome</title>
+    <meta name="title" content="Webiome" />
+    <meta name="description" content="A browser-local agent workspace for files, docs, JavaScript, media processing, and live web outputs." />
+    <meta name="theme-color" content="#111111" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Webiome" />
+    <meta property="og:description" content="A browser-local agent workspace for files, docs, JavaScript, media processing, and live web outputs." />
+    <meta property="og:image" content="https://theabbie.github.io/webiome/assets/og-image-20260912.png" />
+    <meta property="og:url" content="https://theabbie.github.io/webiome/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Webiome" />
+    <meta name="twitter:description" content="A browser-local agent workspace for files, docs, JavaScript, media processing, and live web outputs." />
+    <meta name="twitter:image" content="https://theabbie.github.io/webiome/assets/og-image-20260912.png" />
+    <link rel="icon" href="assets/favicon.png" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #111;
+        color: #ddd;
+        font-family: "Courier New", Courier, monospace;
+        overflow: hidden;
+      }
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+      button {
+        border: 1px solid rgba(255, 255, 255, 0.58);
+        border-radius: 7px;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.88);
+        cursor: pointer;
+        padding: 8px 12px;
+        line-height: 1;
+      }
+      input::file-selector-button {
+        border: 1px solid rgba(255, 255, 255, 0.58);
+        border-radius: 7px;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.88);
+        cursor: pointer;
+        padding: 8px 12px;
+        font: inherit;
+      }
+      button:hover,
+      button:focus,
+      input::file-selector-button:hover {
+        border-color: rgba(255, 255, 255, 0.95);
+        color: white;
+      }
+      button:disabled {
+        cursor: default;
+        opacity: 0.48;
+      }
+      #webiome {
+        height: 100vh;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+      }
+      .bar {
+        display: grid;
+        grid-template-columns: auto 1fr auto auto;
+        gap: 14px;
+        align-items: center;
+        padding: 16px 18px;
+        color: #909090;
+        font-weight: bold;
+        border-bottom: 1px solid #222;
+      }
+      .brand {
+        color: white;
+        letter-spacing: 0;
+        font-size: 20px;
+        display: inline-grid;
+        grid-template-columns: auto auto;
+        align-items: center;
+        gap: 10px;
+      }
+      .brand-mark {
+        width: 25px;
+        height: 25px;
+      }
+      .action {
+        transition: 0.1s border-color, 0.1s color;
+        white-space: nowrap;
+      }
+      .icon-action {
+        width: 36px;
+        height: 36px;
+        justify-self: end;
+        border: 0;
+        padding: 0;
+        display: grid;
+        place-items: center;
+        color: white;
+        opacity: 0.84;
+      }
+      .icon-action:hover,
+      .icon-action:focus {
+        opacity: 1;
+      }
+      .icon-action svg {
+        width: 26px;
+        height: 26px;
+        stroke: currentColor;
+        stroke-width: 3.1;
+        stroke-linecap: round;
+      }
+      .auth-action {
+        justify-self: end;
+        font-size: 12px;
+        color: #bbb;
+      }
+      .auth-action[hidden] {
+        display: none;
+      }
+      .stage {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+      }
+      .transcript {
+        overflow: auto;
+        padding: 20px;
+      }
+      .event {
+        display: grid;
+        grid-template-columns: 110px minmax(0, 1fr);
+        gap: 18px;
+        padding: 12px 0;
+        border-bottom: 1px solid #1d1d1d;
+        transition: 0.12s background;
+      }
+      .event:hover {
+        background: rgba(255, 255, 255, 0.025);
+      }
+      .role {
+        color: #777;
+        font-weight: bold;
+      }
+      .content {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        line-height: 1.45;
+      }
+      .side {
+        border-left: 1px solid #222;
+        overflow: auto;
+        color: #909090;
+      }
+      .side summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 18px 18px 12px;
+        color: white;
+        font-size: 16px;
+        font-weight: bold;
+      }
+      .side summary::-webkit-details-marker {
+        display: none;
+      }
+      .side summary::after {
+        content: "+";
+        float: right;
+        color: #aaa;
+      }
+      .side[open] summary::after {
+        content: "-";
+      }
+      .tools-list {
+        padding: 0 18px 18px;
+      }
+      .tool {
+        padding: 12px 0;
+        border-bottom: 1px solid #222;
+      }
+      .tool strong {
+        display: block;
+        color: #ddd;
+        margin-bottom: 6px;
+      }
+      .tool span {
+        display: block;
+        line-height: 1.35;
+      }
+      .composer {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+        padding: 16px 18px;
+        border-top: 1px solid #222;
+      }
+      .composer-status {
+        grid-column: 1 / -1;
+        min-height: 18px;
+        color: #777;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+      }
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #575757;
+      }
+      .composer-status[data-state="active"] .status-dot {
+        background: #fff;
+        box-shadow: 0 0 12px rgba(255, 255, 255, 0.65);
+        animation: webiome-pulse 1s ease-in-out infinite;
+      }
+      @keyframes webiome-pulse {
+        0%,
+        100% {
+          opacity: 0.42;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+      .prompt {
+        width: 100%;
+        height: 42px;
+        min-height: 42px;
+        max-height: 160px;
+        resize: none;
+        overflow-y: hidden;
+        border: 1px solid #282828;
+        border-radius: 7px;
+        outline: 0;
+        color: white;
+        background: #181818;
+        padding: 10px 12px;
+        line-height: 20px;
+      }
+      .html-input form {
+        display: grid;
+        gap: 10px;
+        max-width: 680px;
+      }
+      .html-input label {
+        display: grid;
+        gap: 6px;
+      }
+      .html-input input,
+      .html-input textarea,
+      .html-input select {
+        width: 100%;
+        border: 0;
+        outline: 0;
+        color: white;
+        background: #181818;
+        padding: 10px 12px;
+      }
+      .html-submit {
+        justify-self: start;
+      }
+      .artifact {
+        display: grid;
+        gap: 10px;
+      }
+      .artifact a {
+        color: white;
+      }
+      .artifact-preview {
+        max-width: min(100%, 680px);
+        max-height: 420px;
+        background: #181818;
+      }
+      .live-output {
+        display: grid;
+        gap: 10px;
+      }
+      .live-output-title {
+        color: #bbb;
+      }
+      .live-output-root {
+        width: min(100%, 960px);
+        min-height: 320px;
+        background: #000;
+        overflow: hidden;
+      }
+      .tool-result {
+        border: 1px solid #2a2a2a;
+        border-radius: 7px;
+        padding: 10px 12px;
+      }
+      .tool-result summary {
+        cursor: pointer;
+        color: #bbb;
+      }
+      .tool-result pre {
+        margin: 12px 0 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        color: #ddd;
+      }
+      @media only screen and (max-width: 860px) {
+        body {
+          overflow: auto;
+        }
+        #webiome {
+          min-height: 100vh;
+          height: auto;
+        }
+        .bar,
+        .composer,
+        .stage {
+          grid-template-columns: 1fr;
+        }
+        .stage {
+          min-height: 60vh;
+          display: flex;
+          flex-direction: column;
+        }
+        .side {
+          order: -1;
+          border-left: 0;
+          border-top: 1px solid #222;
+          border-bottom: 1px solid #222;
+          max-height: 42vh;
+        }
+        .transcript {
+          min-height: 54vh;
+        }
+        .event {
+          grid-template-columns: 1fr;
+          gap: 6px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="webiome">
+      <header class="bar">
+        <div class="brand">
+          <img class="brand-mark" src="assets/icon.svg" alt="" />
+          <span>WEBIOME</span>
+        </div>
+        <div></div>
+        <button class="action auth-action" data-testid="auth" hidden>SIGN IN</button>
+        <button class="icon-action" data-testid="new-session" aria-label="New session">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14"></path>
+            <path d="M5 12h14"></path>
+          </svg>
+        </button>
+      </header>
+      <section class="stage">
+        <div class="transcript" data-testid="transcript"></div>
+        <details class="side" data-testid="tools-panel">
+          <summary>TOOLS</summary>
+          <div class="tools-list" data-testid="tools"></div>
+        </details>
+      </section>
+      <form class="composer" data-testid="composer">
+        <div class="composer-status" data-testid="status" data-state="ready">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span data-status-text>ready</span>
+        </div>
+        <textarea class="prompt" data-testid="prompt" placeholder="Ask the browser agent"></textarea>
+        <button class="action" data-testid="send">SEND</button>
+      </form>
+    </main>
+    <script type="module">
+import { Agent } from "https://esm.sh/@earendil-works/pi-agent-core@0.85.1?bundle";
+import { createAssistantMessageEventStream, Type } from "https://esm.sh/@earendil-works/pi-ai@0.85.1?bundle";
+
+const DEFAULT_ENDPOINT = "https://webiome.abbie.workers.dev/api/stream";
+const MODEL = {
+  id: "google/gemini-2.5-flash",
+  name: "Gemini 2.5 Flash through Exa",
+  api: "webiome-exa",
+  provider: "webiome",
+  baseUrl: "",
+  reasoning: false,
+  input: ["text"],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 128000,
+  maxTokens: 8192,
+};
+const REFERENCE_SEEDS = [
+  {
+    id: "browser-runtime",
+    label: "Browser runtime APIs",
+    shortDescription: "DOM, fetch, canvas, dynamic import, workers, storage, media, and browser UI APIs.",
+    description: "Use for local browser APIs: DOM, fetch, canvas, dynamic import, workers, storage, media, and browser UI.",
+    starter: "Use run_js with standard browser globals such as document, fetch, Blob, URL, canvas, and dynamic import().",
+    docs: [
+      { id: "web-api-index", title: "MDN Web API index", url: "https://developer.mozilla.org/en-US/docs/Web/API" },
+      { id: "dynamic-import", title: "Dynamic import()", url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import" },
+      { id: "canvas-element", title: "HTMLCanvasElement", url: "https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement" },
+    ],
+  },
+  {
+    id: "ffmpeg-wasm",
+    label: "ffmpeg.wasm",
+    shortDescription: "Browser-side video and audio processing with FFmpeg compiled to WebAssembly.",
+    description: "Use for browser-side video/audio processing. On static hosts, FFmpeg.load must receive classWorkerURL plus coreURL/wasmURL as same-origin blob URLs. Use a self-contained bundled class worker, for example blob(fetch('https://esm.sh/@ffmpeg/ffmpeg@0.12.10/es2022/dist/esm/worker.bundle.mjs')), because @ffmpeg/ffmpeg/dist/esm/worker.js has relative imports. Pair that module worker with @ffmpeg/core ESM assets such as dist/esm/ffmpeg-core.js and dist/esm/ffmpeg-core.wasm; UMD core blobs can fail to import as a module.",
+    starter: "Import { FFmpeg } from esm.sh, create classWorkerURL/coreURL/wasmURL with assets.blobUrl(), call ff.load({ classWorkerURL, coreURL, wasmURL }), then writeFile/exec/readFile.",
+    docs: [
+      { id: "usage", title: "ffmpeg.wasm usage", url: "https://raw.githubusercontent.com/ffmpegwasm/ffmpeg.wasm/main/apps/website/docs/getting-started/usage.md" },
+      { id: "ffmpeg-class", title: "FFmpeg class source", url: "https://raw.githubusercontent.com/ffmpegwasm/ffmpeg.wasm/main/packages/ffmpeg/src/classes.ts" },
+      { id: "worker-source", title: "FFmpeg worker source", url: "https://raw.githubusercontent.com/ffmpegwasm/ffmpeg.wasm/main/packages/ffmpeg/src/worker.ts" },
+      { id: "util-source", title: "fetchFile / toBlobURL source", url: "https://raw.githubusercontent.com/ffmpegwasm/ffmpeg.wasm/main/packages/util/src/index.ts" },
+    ],
+  },
+  {
+    id: "magick-wasm",
+    label: "magick-wasm",
+    shortDescription: "Still-image conversion, effects, compositing, resizing, and drawing.",
+    description: "Use for browser-side still image conversion, effects, compositing, resizing, and drawing. Docs are sparse; inspect runtime exports after import.",
+    starter: "Import the package dynamically, inspect exports when needed, read uploaded bytes with files.bytes(id), and save outputs with files.save().",
+    docs: [
+      { id: "npm", title: "magick-wasm npm package", url: "https://www.npmjs.com/package/@imagemagick/magick-wasm" },
+      { id: "github", title: "magick-wasm repository", url: "https://github.com/dlemstra/magick-wasm" },
+    ],
+  },
+  {
+    id: "manim-web",
+    label: "manim-web",
+    shortDescription: "Programmatic mathematical and motion-graphics scenes rendered with WebGL.",
+    description: "Use for browser-side programmatic mathematical and motion-graphics scenes with WebGL. Import dynamically, read the API docs first, and inspect runtime exports before writing nontrivial scene code.",
+    starter: "Use const M = await import('https://esm.sh/manim-web@latest'); const root = display.mount('Scene',{width,height}); const scene = new M.Scene(root,{width,height,backgroundColor:M.BLACK});",
+    docs: [
+      { id: "intro", title: "manim-web introduction", url: "https://maloyan.github.io/manim-web/" },
+      { id: "api", title: "manim-web API index", url: "https://maloyan.github.io/manim-web/api" },
+      { id: "video-exporter", title: "VideoExporter API", url: "https://maloyan.github.io/manim-web/api/classes/VideoExporter" },
+      { id: "registry", title: "manim-web npm registry metadata", url: "https://registry.npmjs.org/manim-web/latest" },
+    ],
+  },
+  {
+    id: "mupdf-js",
+    label: "MuPDF.js",
+    shortDescription: "PDF inspection, page rendering, extraction, editing, and merging.",
+    description: "Use for browser-side PDF inspection, page rendering, extraction, editing, and merging.",
+    starter: "Import MuPDF.js dynamically, read PDF bytes with files.bytes(id), operate in browser memory, and save generated PDFs/images with files.save().",
+    docs: [
+      { id: "getting-started", title: "MuPDF.js getting started", url: "https://mupdfjs.readthedocs.io/en/latest/getting-started/index.html" },
+      { id: "document-guide", title: "MuPDF.js document guide", url: "https://mupdfjs.readthedocs.io/en/latest/how-to-guide/document.html" },
+      { id: "pdf-write-options", title: "PDF write options", url: "https://mupdf.readthedocs.io/en/latest/reference/common/pdf-write-options.html" },
+    ],
+  },
+  {
+    id: "tesseract-js",
+    label: "Tesseract.js",
+    shortDescription: "Browser OCR for screenshots, scans, printed text, and layout data.",
+    description: "Use for browser OCR of screenshots, scans, printed text, and word/line layout data.",
+    starter: "Import Tesseract.js dynamically, pass a file URL or Blob from files.get()/files.url(), and save text/JSON outputs with files.save().",
+    docs: [
+      { id: "github", title: "Tesseract.js repository", url: "https://github.com/naptha/tesseract.js" },
+      { id: "api", title: "Tesseract.js API docs", url: "https://github.com/naptha/tesseract.js/blob/master/docs/api.md" },
+    ],
+  },
+  {
+    id: "transformers-js",
+    label: "Transformers.js",
+    shortDescription: "Browser-side ML inference with Hugging Face Transformers.js.",
+    description: "Use for browser-side ML inference. Prefer docs and small quantized models before writing code.",
+    starter: "Import Transformers.js dynamically, prefer pipeline() with quantized dtype when available, and render/save outputs through display.* or files.save().",
+    docs: [
+      { id: "overview", title: "Transformers.js overview", url: "https://huggingface.co/docs/transformers.js/en/index" },
+      { id: "pipelines", title: "Transformers.js pipelines", url: "https://huggingface.co/docs/transformers.js/en/pipelines" },
+      { id: "webgpu", title: "Transformers.js WebGPU guide", url: "https://huggingface.co/docs/transformers.js/en/guides/webgpu" },
+    ],
+  },
+  {
+    id: "mediapipe-tasks",
+    label: "MediaPipe Tasks",
+    shortDescription: "Browser-side vision, audio, text tasks, and interactive camera apps.",
+    description: "Use for browser-side vision/audio/text tasks and interactive camera apps. Do not guess package versions or use jsDelivr +esm for tasks-vision; check registry metadata or use the package module bundle.",
+    starter: "For vision tasks, import from https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs, then initialize FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'). Render webcam/canvas UI into display.mount().",
+    docs: [
+      { id: "web-setup", title: "MediaPipe web setup", url: "https://developers.google.com/edge/mediapipe/solutions/setup_web" },
+      { id: "face-detector", title: "Face Detector web guide", url: "https://developers.google.com/edge/mediapipe/solutions/vision/face_detector/web_js" },
+      { id: "tasks-vision-npm", title: "MediaPipe Tasks Vision npm package", url: "https://www.npmjs.com/package/@mediapipe/tasks-vision" },
+      { id: "tasks-vision-registry", title: "MediaPipe Tasks Vision registry metadata", url: "https://registry.npmjs.org/@mediapipe/tasks-vision/latest" },
+      { id: "tasks-vision-bundle", title: "MediaPipe Tasks Vision bundle", url: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs" },
+    ],
+  },
+];
+
+class WebiomeRuntime {
+  constructor(ui) {
+    this.ui = ui;
+    this.files = new Map();
+    this.libraryCache = new Map();
+  }
+
+  addFile(file, name = file.name || "file") {
+    const id = `file_${crypto.randomUUID()}`;
+    const record = {
+      id,
+      name,
+      type: file.type || "application/octet-stream",
+      size: file.size,
+      blob: file,
+    };
+    this.files.set(id, record);
+    return this.info(record);
+  }
+
+  info(record) {
+    return {
+      id: record.id,
+      name: record.name,
+      type: record.type,
+      size: record.size,
+    };
+  }
+
+  fileHelper() {
+    return {
+      list: () => Array.from(this.files.values()).map((record) => this.info(record)),
+      get: async (id) => this.requireFile(id).blob,
+      text: async (id) => this.requireFile(id).blob.text(),
+      bytes: async (id) => new Uint8Array(await this.requireFile(id).blob.arrayBuffer()),
+      url: (id) => URL.createObjectURL(this.requireFile(id).blob),
+      save: async (name, value, type = "application/octet-stream") => {
+        let blob;
+        let filename;
+        if (name instanceof File && value === undefined) {
+          blob = name;
+          filename = name.name || "file";
+        } else if (name instanceof Blob && value === undefined) {
+          blob = name;
+          filename = "file";
+        } else {
+          filename = String(name || "file");
+          blob = value instanceof Blob ? value : new Blob([value], { type });
+        }
+        const info = this.addFile(blob, filename);
+        this.ui.renderArtifact(info, blob);
+        return info;
+      },
+    };
+  }
+
+  assetHelper() {
+    return {
+      blobUrl: async (url, type = "application/javascript") => {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Asset fetch failed ${response.status}: ${url}`);
+        const blob = await response.blob();
+        return URL.createObjectURL(type ? blob.slice(0, blob.size, type) : blob);
+      },
+      moduleUrl: (code) => URL.createObjectURL(new Blob([code], { type: "application/javascript" })),
+      objectUrl: (value, type = "application/octet-stream") => {
+        const blob = value instanceof Blob ? value : new Blob([value], { type });
+        return URL.createObjectURL(blob);
+      },
+      revoke: (url) => URL.revokeObjectURL(url),
+    };
+  }
+
+  displayHelper() {
+    return {
+      mount: (title = "Output", options = {}) => this.ui.renderMount(title, options),
+      html: (title, markup, options = {}) => {
+        const root = this.ui.renderMount(title, options);
+        root.innerHTML = this.ui.cleanHtml(markup);
+        return root;
+      },
+      element: (title, element, options = {}) => {
+        const root = this.ui.renderMount(title, options);
+        root.appendChild(element);
+        return root;
+      },
+    };
+  }
+
+  chatHelper() {
+    return {
+      send: async (text) => await this.ui.submitFromRuntime(text),
+      status: (text) => this.ui.setStatus(text || "working"),
+    };
+  }
+
+  libraryHelper() {
+    return {
+      load: (name) => this.loadLibrary(name),
+      ffmpeg: () => this.loadLibrary("ffmpeg"),
+      magick: () => this.loadLibrary("magick"),
+      manim: () => this.loadLibrary("manim"),
+      mediapipe: () => this.loadLibrary("mediapipe"),
+      mupdf: () => this.loadLibrary("mupdf"),
+      tesseract: () => this.loadLibrary("tesseract"),
+      transformers: () => this.loadLibrary("transformers"),
+    };
+  }
+
+  loadLibrary(name) {
+    const key = String(name || "").toLowerCase().replace(/[^a-z0-9-]/g, "");
+    if (this.libraryCache.has(key)) return this.libraryCache.get(key);
+    const loaders = {
+      ffmpeg: () => this.loadFfmpeg(),
+      magick: () => this.loadMagick(),
+      manim: () => this.loadManim(),
+      mediapipe: () => this.loadMediaPipe(),
+      mupdf: () => this.loadMupdf(),
+      tesseract: () => this.loadTesseract(),
+      transformers: () => this.loadTransformers(),
+    };
+    if (!loaders[key]) throw new Error(`Unknown library helper: ${name}`);
+    const promise = loaders[key]();
+    this.libraryCache.set(key, promise);
+    return promise;
+  }
+
+  async loadFfmpeg() {
+    const [{ FFmpeg }, { fetchFile }] = await Promise.all([
+      import("https://esm.sh/@ffmpeg/ffmpeg@0.12.10?bundle&target=es2022"),
+      import("https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js"),
+    ]);
+    const assets = this.assetHelper();
+    const loadConfig = async () => ({
+      classWorkerURL: await assets.blobUrl(
+        "https://esm.sh/@ffmpeg/ffmpeg@0.12.10/es2022/dist/esm/worker.bundle.mjs",
+        "application/javascript",
+      ),
+      coreURL: await assets.blobUrl(
+        "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js",
+        "text/javascript",
+      ),
+      wasmURL: await assets.blobUrl(
+        "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm",
+        "application/wasm",
+      ),
+    });
+    const create = async (options = {}) => {
+      const ffmpeg = new FFmpeg();
+      await ffmpeg.load({ ...(await loadConfig()), ...options });
+      return ffmpeg;
+    };
+    return { FFmpeg, fetchFile, loadConfig, create };
+  }
+
+  async loadMagick() {
+    const mod = await import("https://cdn.jsdelivr.net/npm/@imagemagick/magick-wasm@0.0.40/dist/index.js");
+    const response = await fetch("https://cdn.jsdelivr.net/npm/@imagemagick/magick-wasm@0.0.40/dist/magick.wasm");
+    if (!response.ok) throw new Error(`Magick WASM fetch failed: ${response.status}`);
+    await mod.initializeImageMagick(new Uint8Array(await response.arrayBuffer()));
+    return { Magick: mod, mod };
+  }
+
+  async loadManim() {
+    const M = await import("https://cdn.jsdelivr.net/npm/manim-web@0.3.22/dist/manim-web.browser.js");
+    const createScene = ({ title = "Manim scene", width = 800, height = 450, backgroundColor = M.BLACK } = {}) => {
+      const root = this.displayHelper().mount(title, { width, height });
+      const scene = new M.Scene(root, { width, height, backgroundColor });
+      return { M, root, scene };
+    };
+    return { M, createScene };
+  }
+
+  async loadMediaPipe() {
+    const versions = {
+      vision: "latest",
+      audio: "latest",
+      text: "latest",
+      genai: "latest",
+    };
+    const moduleUrls = {
+      vision: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${versions.vision}/vision_bundle.mjs`,
+      audio: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-audio@${versions.audio}/audio_bundle.mjs`,
+      text: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-text@${versions.text}/text_bundle.mjs`,
+      genai: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-genai@${versions.genai}/genai_bundle.mjs`,
+    };
+    const wasmRoots = {
+      vision: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${versions.vision}/wasm`,
+      audio: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-audio@${versions.audio}/wasm`,
+      text: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-text@${versions.text}/wasm`,
+      genai: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-genai@${versions.genai}/wasm`,
+    };
+    const imports = new Map();
+    const importPackage = async (kind = "vision") => {
+      const key = String(kind || "vision");
+      if (!moduleUrls[key]) throw new Error(`Unknown MediaPipe package: ${kind}`);
+      if (!imports.has(key)) imports.set(key, import(moduleUrls[key]));
+      return await imports.get(key);
+    };
+    const vision = await importPackage("vision");
+    const MP = { ...vision };
+    MP.vision = vision;
+    MP.importVisionTasks = async () => (MP.vision = await importPackage("vision"));
+    MP.importAudioTasks = async () => (MP.audio = await importPackage("audio"));
+    MP.importTextTasks = async () => (MP.text = await importPackage("text"));
+    MP.importGenAITasks = async () => (MP.genai = await importPackage("genai"));
+    const helpers = {
+      wasmRoot: wasmRoots.vision,
+      wasmRoots,
+      moduleUrls,
+      models: this.mediapipeModels(),
+      importVisionTasks: MP.importVisionTasks,
+      importAudioTasks: MP.importAudioTasks,
+      importTextTasks: MP.importTextTasks,
+      importGenAITasks: MP.importGenAITasks,
+      canvas: (width, height) => Object.assign(document.createElement("canvas"), { width, height }),
+      canvasToBlob: (canvas, type = "image/png", quality) =>
+        new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Canvas export failed")), type, quality)),
+      loadImage: async (input) => {
+        const source = input instanceof Blob ? URL.createObjectURL(input) : input;
+        const image = new Image();
+        image.crossOrigin = "anonymous";
+        image.src = source;
+        await image.decode();
+        return image;
+      },
+      getUserMedia: (constraints = { video: true, audio: false }) => navigator.mediaDevices.getUserMedia(constraints),
+    };
+    return { MP, helpers, wasmRoots, models: helpers.models, importPackage };
+  }
+
+  mediapipeModels() {
+    return {
+      faceDetector: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_full_range/float16/latest/blaze_face_full_range.tflite",
+      faceLandmarker: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+      handLandmarker: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
+      poseLandmarkerLite: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
+      poseLandmarkerFull: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task",
+      gestureRecognizer: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/latest/gesture_recognizer.task",
+      objectDetector: "https://storage.googleapis.com/mediapipe-tasks/object_detector/efficientdet_lite0_uint8.tflite",
+      imageSegmenter: "https://storage.googleapis.com/mediapipe-assets/deeplabv3.tflite?generation=1661875711618421",
+      imageClassifier: "https://storage.googleapis.com/mediapipe-models/image_classifier/efficientnet_lite0/float32/1/efficientnet_lite0.tflite",
+    };
+  }
+
+  async loadMupdf() {
+    const mupdf = await import("https://cdn.jsdelivr.net/npm/mupdf@1.27.0/dist/mupdf.js");
+    return { mupdf };
+  }
+
+  async loadTesseract() {
+    const mod = await import("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js");
+    return { Tesseract: mod.default || mod, mod };
+  }
+
+  async loadTransformers() {
+    const HF = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.0.1/dist/transformers.min.js");
+    return { HF, pipeline: HF.pipeline };
+  }
+
+  requireFile(id) {
+    const record = this.files.get(id);
+    if (!record) throw new Error(`Unknown file id: ${id}`);
+    return record;
+  }
+
+  async run(code, signal) {
+    if (signal?.aborted) throw new Error("Execution aborted");
+    const fn = new Function("files", "html", "assets", "display", "libs", "chat", `"use strict"; return (async () => {\n${code}\n})()`);
+    return await fn(this.fileHelper(), (strings, ...values) =>
+      strings.reduce((out, item, index) => out + item + (values[index] ?? ""), ""),
+      this.assetHelper(),
+      this.displayHelper(),
+      this.libraryHelper(),
+      this.chatHelper(),
+    );
+  }
+
+  async requestHtmlInput(params, signal) {
+    if (signal?.aborted) throw new Error("Request aborted");
+    return await this.ui.requestHtmlInput(params, async (file) => this.addFile(file), signal);
+  }
+}
+
+class WebiomeTools {
+  constructor(runtime, config) {
+    this.runtime = runtime;
+    this.config = config;
+    this.docCache = new Map();
+  }
+
+  list() {
+    return [
+      {
+        name: "run_js",
+        label: "Run JS",
+        description: "Run browser JavaScript. Helpers: files.*, assets.*, display.*, libs.* lazy library runtimes, chat.send() to continue the agent from generated UI.",
+        parameters: Type.Object({
+          code: Type.String(),
+        }),
+        executionMode: "sequential",
+        execute: async (_id, params, signal) => {
+          const value = await this.runtime.run(params.code, signal);
+          return {
+            content: [{ type: "text", text: this.stringify(value) }],
+            details: { value },
+          };
+        },
+      },
+      {
+        name: "request_html_input",
+        label: "Request HTML Input",
+        description: "Render plain HTML inputs in chat and wait for submit. File inputs return stable ids for files.* helpers.",
+        parameters: Type.Object({
+          html: Type.String(),
+          submitLabel: Type.Optional(Type.String()),
+        }),
+        executionMode: "sequential",
+        execute: async (_id, params, signal) => {
+          const value = await this.runtime.requestHtmlInput(params, signal);
+          return {
+            content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
+            details: value,
+          };
+        },
+      },
+      {
+        name: "fetch_url",
+        label: "Fetch URL",
+        description: "Fetch a public http(s) URL through the Worker and return readable text.",
+        parameters: Type.Object({
+          url: Type.String(),
+        }),
+        execute: async (_id, params) => this.docResult(params.url),
+      },
+      {
+        name: "list_reference_docs",
+        label: "List Reference Docs",
+        description: "List known browser/WASM reference docs. Use compact:true for initial selection; pass id for one full entry.",
+        parameters: Type.Object({
+          compact: Type.Optional(Type.Boolean()),
+          id: Type.Optional(Type.String()),
+        }),
+        execute: async (_id, params = {}) => {
+          const value = this.referenceDocs(params);
+          return {
+            content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
+            details: value,
+          };
+        },
+      },
+      {
+        name: "grep_url",
+        label: "Grep URL",
+        description: "Fetch one explicit URL and return matching lines for a query.",
+        parameters: Type.Object({
+          url: Type.String(),
+          query: Type.String(),
+          limit: Type.Optional(Type.Number()),
+        }),
+        execute: async (_id, params) => {
+          const value = await this.grepDoc(params.url, params.query, params.limit || 20);
+          return {
+            content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
+            details: value,
+          };
+        },
+      },
+      {
+        name: "page_state",
+        label: "Page State",
+        description: "Inspect transcript, backend, files, tools, and streaming state.",
+        parameters: Type.Object({}),
+        execute: async () => {
+          const value = window.webiome?.snapshot() || {};
+          return {
+            content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
+            details: value,
+          };
+        },
+      },
+    ];
+  }
+
+  stringify(value) {
+    if (typeof value === "string") return value;
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value);
+    }
+  }
+
+  referenceDocs(params = {}) {
+    const items = params.id ? [this.referenceById(params.id)] : REFERENCE_SEEDS;
+    if (!params.compact) return items;
+    return items.map((item) => ({
+      id: item.id,
+      label: item.label,
+      shortDescription: item.shortDescription,
+      docs: item.docs.length,
+    }));
+  }
+
+  referenceById(id) {
+    const item = REFERENCE_SEEDS.find((ref) => ref.id === id);
+    if (!item) throw new Error(`Unknown reference doc id: ${id}`);
+    return item;
+  }
+
+  async docResult(url, meta = {}) {
+    const text = await this.fetchDoc(url);
+    const value = { ...meta, url, text };
+    return {
+      content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
+      details: value,
+    };
+  }
+
+  async fetchDoc(url) {
+    if (this.docCache.has(url)) return this.docCache.get(url);
+    const base = this.config.endpoint.replace(/\/api\/stream$/, "");
+    const response = await fetch(`${base}/api/doc?url=${encodeURIComponent(url)}`);
+    if (!response.ok) throw new Error(`Doc fetch failed ${response.status}: ${(await response.text()).slice(0, 300)}`);
+    const data = await response.json();
+    if (!data.ok) throw new Error(`Doc fetch failed upstream ${data.status}`);
+    this.docCache.set(url, data.text);
+    return data.text;
+  }
+
+  async grepDoc(url, query, limit) {
+    const needle = query.toLowerCase();
+    const matches = [];
+    const text = await this.fetchDoc(url);
+    const lines = text.split("\n");
+    for (let index = 0; index < lines.length; index++) {
+      if (!lines[index].toLowerCase().includes(needle)) continue;
+      matches.push({
+        url,
+        line: index + 1,
+        text: lines.slice(Math.max(0, index - 1), index + 2).join("\n").slice(0, 1200),
+      });
+      if (matches.length >= limit) return matches;
+    }
+    return matches;
+  }
+}
+
+class WebiomeBridge {
+  constructor(config) {
+    this.config = config;
+  }
+
+  stream(model, context, options) {
+    const stream = createAssistantMessageEventStream();
+    void this.forward(stream, model, context, options);
+    return stream;
+  }
+
+  async forward(stream, model, context, options) {
+    let output;
+    try {
+      const response = await fetch(this.config.endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(this.config.authToken ? { Authorization: `Bearer ${this.config.authToken}` } : {}),
+        },
+        signal: options?.signal,
+        body: JSON.stringify({ model, context: this.serializeContext(context) }),
+      });
+      if (!response.ok) throw new Error(`Webiome worker ${response.status}: ${(await response.text()).slice(0, 500)}`);
+      if (!response.body) throw new Error("Webiome worker returned no stream");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let pending = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        pending += decoder.decode(value, { stream: !done });
+        const events = pending.split("\n\n");
+        pending = done ? "" : events.pop() || "";
+        for (const event of events) {
+          const data = this.parseSse(event);
+          if (!data) continue;
+          output = data.message || data.error || data.partial || output;
+          stream.push(data);
+        }
+        if (done) break;
+      }
+      stream.end(output);
+    } catch (error) {
+      const message = this.errorMessage(model, error, options?.signal?.aborted);
+      stream.push({ type: "error", reason: message.stopReason, error: message });
+      stream.end(message);
+    }
+  }
+
+  parseSse(event) {
+    const line = event.split("\n").find((item) => item.startsWith("data:"));
+    if (!line) return null;
+    return JSON.parse(line.slice(5).trim());
+  }
+
+  serializeContext(context) {
+    return {
+      systemPrompt: context.systemPrompt,
+      messages: context.messages || [],
+      tools: (context.tools || []).map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+      })),
+    };
+  }
+
+  errorMessage(model, error, aborted) {
+    return {
+      role: "assistant",
+      content: [],
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: aborted ? "aborted" : "error",
+      errorMessage: error instanceof Error ? error.message : String(error),
+      timestamp: Date.now(),
+    };
+  }
+}
+
+class WebiomeSession {
+  constructor(config, ui) {
+    this.config = config;
+    this.ui = ui;
+    this.runtime = new WebiomeRuntime(ui);
+    this.tools = new WebiomeTools(this.runtime, config).list();
+    this.bridge = new WebiomeBridge(config);
+    this.agent = new Agent({
+      initialState: {
+        systemPrompt: [
+          "You are Webiome, a browser-local agent.",
+          "Before solving a task, consider the available tools and use them when they fit; do not skip directly to bespoke code if a Webiome tool covers discovery, input, files, docs, or output.",
+          "For unfamiliar browser/WASM libraries, call list_reference_docs({compact:true}) first; after choosing a library, call list_reference_docs({id, compact:false}) for starter notes and doc URLs.",
+          "Use fetch_url or grep_url on one explicit URL before guessing API names.",
+          "Use request_html_input for user text, choices, and uploads; the chat supplies submit controls.",
+          "Use run_js for browser work. For known libraries, call libs.* before raw imports: libs.ffmpeg(), libs.magick(), libs.manim(), libs.mediapipe(), libs.mupdf(), libs.tesseract(), libs.transformers().",
+          "Before dynamic-importing other CDN packages, verify the version and module entry from reference docs, registry metadata, or fetch_url; do not invent versions.",
+          "In run_js, files.* handles workspace files; assets.* creates/revokes blob URLs; display.* renders visible DOM/canvas/WebGL output; libs.* provides lazy known-good imports/runtime helpers; chat.send(text) submits a follow-up user message from generated UI.",
+          "Any UI the user should see must be placed in the chat with display.mount(), display.html(), or display.element(); do not append visible interfaces to document.body, #webiome, or unrelated page containers.",
+          "For interactive browser outputs such as webcam previews, canvases, WebGL, media controls, generated forms, or dashboards, create normal DOM inside a display mount, keep reusable handles on window when later turns may need them, and call chat.send() after user actions that should continue the task.",
+          "For generated files or captured media, save through files.save(name,value,type) or files.save(fileOrBlob) so the user gets a visible artifact and future turns can reuse its file id.",
+          "When the user reports that a produced artifact or UI is invalid, broken, blank, or not what they asked for, treat it as recoverable if the original inputs or handles still exist: inspect the state, run a corrected tool call, and only give a final apology when you genuinely cannot make progress.",
+          "For CDN workers/WASM, prefer blob URLs. For ffmpeg.wasm, pass classWorkerURL plus ESM coreURL/wasmURL; core/wasm only is incomplete.",
+        ].join("\n"),
+        model: MODEL,
+        tools: this.tools,
+      },
+      streamFn: (model, context, options) => this.bridge.stream(model, context, options),
+      toolExecution: "sequential",
+      shouldStopAfterTurn: ({ message }) => message.stopReason !== "toolUse",
+    });
+    this.agent.subscribe((event) => this.onEvent(event));
+  }
+
+  async prompt(text) {
+    await this.agent.prompt(text);
+  }
+
+  abort() {
+    this.agent.abort();
+  }
+
+  reset() {
+    this.agent.reset();
+    this.ui.render(this.agent.state.messages);
+  }
+
+  snapshot() {
+    return {
+      endpoint: this.config.endpoint,
+      messages: this.agent.state.messages.length,
+      tools: this.tools.map((tool) => tool.name),
+      files: this.runtime.fileHelper().list(),
+      streaming: this.agent.state.isStreaming,
+    };
+  }
+
+  onEvent(event) {
+    this.ui.render(this.agent.state.messages, this.agent.state.streamingMessage);
+    this.ui.setStatus(this.agent.state.isStreaming ? this.statusLabel() : "ready");
+  }
+
+  statusLabel() {
+    const streaming = this.agent.state.streamingMessage;
+    const content = Array.isArray(streaming?.content) ? streaming.content : [];
+    const tool = content.find((part) => part.type === "toolCall");
+    if (tool?.name) return `running ${tool.name}`;
+    return "thinking";
+  }
+}
+
+class WebiomeUi {
+  constructor() {
+    this.transcript = document.querySelector("[data-testid='transcript']");
+    this.prompt = document.querySelector("[data-testid='prompt']");
+    this.form = document.querySelector("[data-testid='composer']");
+    this.status = document.querySelector("[data-testid='status']");
+    this.tools = document.querySelector("[data-testid='tools']");
+    this.toolsPanel = document.querySelector("[data-testid='tools-panel']");
+    this.newSession = document.querySelector("[data-testid='new-session']");
+    this.auth = document.querySelector("[data-testid='auth']");
+    this.messageNodes = [];
+    this.streamingNode = null;
+    this.emptyNode = null;
+  }
+
+  bind(app) {
+    this.app = app;
+    this.prompt.addEventListener("input", () => this.resizePrompt());
+    this.prompt.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      this.form.requestSubmit();
+    });
+    this.form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const text = this.prompt.value.trim();
+      if (!text) return;
+      this.prompt.value = "";
+      this.resizePrompt();
+      if (await app.maybeCompleteAuth(text)) return;
+      this.setStatus("thinking");
+      try {
+        await app.prompt(text);
+      } finally {
+        if (!app.snapshot().streaming) this.setStatus("ready");
+      }
+    });
+    this.newSession.addEventListener("click", () => app.newSession());
+    this.auth?.addEventListener("click", () => app.toggleAuth());
+    window.addEventListener("resize", () => this.syncToolsPanel());
+    this.syncToolsPanel();
+    this.resizePrompt();
+    this.setStatus("ready");
+  }
+
+  setStatus(text) {
+    if (!this.status) return;
+    this.status.dataset.state = text === "ready" ? "ready" : "active";
+    this.status.querySelector("[data-status-text]").textContent = text;
+  }
+
+  renderAuth(state) {
+    if (!this.auth) return;
+    this.auth.textContent = state.authenticated ? "SIGN OUT" : "SIGN IN";
+    this.auth.title = state.authenticated ? (state.email || state.name || "Signed in with ChatGPT") : "Sign in with ChatGPT";
+  }
+
+  async submitFromRuntime(text) {
+    const value = String(text || "").trim();
+    if (!value) throw new Error("chat.send needs non-empty text");
+    if (!this.app) throw new Error("Webiome app is not ready");
+    this.setStatus("thinking");
+    try {
+      await this.app.prompt(value);
+    } finally {
+      if (!this.app.snapshot().streaming) this.setStatus("ready");
+    }
+  }
+
+  syncToolsPanel() {
+    this.toolsPanel.open = window.matchMedia("(min-width: 861px)").matches;
+  }
+
+  resizePrompt() {
+    this.prompt.style.height = "42px";
+    const next = Math.min(this.prompt.scrollHeight, 160);
+    this.prompt.style.height = `${Math.max(42, next)}px`;
+    this.prompt.style.overflowY = this.prompt.scrollHeight > 160 ? "auto" : "hidden";
+  }
+
+  renderTools(tools) {
+    this.tools.innerHTML = "";
+    for (const tool of tools) {
+      const node = document.createElement("div");
+      node.className = "tool";
+      node.innerHTML = `<strong>${this.escape(tool.name)}</strong><span>${this.escape(tool.description)}</span>`;
+      this.tools.appendChild(node);
+    }
+  }
+
+  clearTranscript() {
+    this.transcript.innerHTML = "";
+    this.messageNodes = [];
+    this.streamingNode = null;
+    this.emptyNode = null;
+  }
+
+  render(messages, streaming) {
+    if (!messages.length && !streaming) {
+      if (!this.emptyNode) {
+        const node = document.createElement("div");
+        node.className = "event";
+        node.innerHTML = `<div class="role">SYSTEM</div><div class="content">${this.escape([
+          "Ask Webiome to work with files, draw browser animations, inspect documentation, run JavaScript, process images/video/PDFs, or build small interactive outputs right here.",
+          "It can ask you for uploads or form input when it needs them.",
+          "Ask it to inspect docs, request files or inputs, run browser-side JavaScript, render UI, process media, or create downloadable outputs.",
+        ].join("\n"))}</div>`;
+        this.emptyNode = node;
+        this.transcript.appendChild(node);
+      }
+      return;
+    }
+    if (this.emptyNode) {
+      this.emptyNode.remove();
+      this.emptyNode = null;
+    }
+    for (const [index, message] of messages.entries()) {
+      const existing = this.messageNodes[index];
+      if (existing) this.updateMessageNode(existing, message);
+      else {
+        const node = this.messageNode(message);
+        this.messageNodes[index] = node;
+        this.transcript.appendChild(node);
+      }
+    }
+    if (streaming) {
+      if (!this.streamingNode) {
+        this.streamingNode = this.messageNode(streaming);
+        this.streamingNode.dataset.streaming = "true";
+        this.transcript.appendChild(this.streamingNode);
+      } else {
+        this.updateMessageNode(this.streamingNode, streaming);
+      }
+    } else if (this.streamingNode) {
+      this.streamingNode.remove();
+      this.streamingNode = null;
+    }
+    this.transcript.scrollTop = this.transcript.scrollHeight;
+  }
+
+  requestHtmlInput(params, addFile, signal) {
+    return new Promise((resolve, reject) => {
+      this.setStatus("waiting for input");
+      const node = document.createElement("div");
+      node.className = "event";
+      node.dataset.role = "input";
+      const role = document.createElement("div");
+      role.className = "role";
+      role.textContent = "INPUT";
+      const content = document.createElement("div");
+      content.className = "content html-input";
+      const form = document.createElement("form");
+      form.innerHTML = this.cleanHtml(params.html || "");
+      const submit = document.createElement("button");
+      submit.type = "submit";
+      submit.className = "action html-submit";
+      submit.textContent = params.submitLabel || "Submit";
+      form.appendChild(submit);
+      content.appendChild(form);
+      node.append(role, content);
+      this.transcript.appendChild(node);
+      this.transcript.scrollTop = this.transcript.scrollHeight;
+
+      const abort = () => {
+        form.querySelectorAll("input, textarea, select, button").forEach((item) => item.disabled = true);
+        this.setStatus("ready");
+        reject(new Error("Input request aborted"));
+      };
+      signal?.addEventListener("abort", abort, { once: true });
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        submit.disabled = true;
+        try {
+          const result = await this.formResult(form, addFile);
+          form.querySelectorAll("input, textarea, select, button").forEach((item) => item.disabled = true);
+          signal?.removeEventListener("abort", abort);
+          this.setStatus("thinking");
+          resolve(result);
+        } catch (error) {
+          submit.disabled = false;
+          reject(error);
+        }
+      });
+    });
+  }
+
+  async formResult(form, addFile) {
+    const fields = {};
+    const files = [];
+    for (const element of Array.from(form.elements)) {
+      if (element instanceof HTMLInputElement && element.type === "file") {
+        if (element.disabled) continue;
+        const field = element.name || element.id || `file_${files.length + 1}`;
+        const selected = [];
+        for (const file of Array.from(element.files || [])) {
+          const info = await addFile(file);
+          const item = { field, ...info };
+          files.push(item);
+          selected.push(item);
+        }
+        if (selected.length === 1) this.addField(fields, field, selected[0].id);
+        else if (selected.length > 1) this.addField(fields, field, selected.map((item) => item.id));
+        continue;
+      }
+      if (!element.name || element.type === "submit" || element.disabled) continue;
+      if (element instanceof HTMLInputElement && element.type === "checkbox") {
+        this.addField(fields, element.name, element.checked ? (element.value || "on") : false);
+        continue;
+      }
+      if (element instanceof HTMLInputElement && element.type === "radio") {
+        if (element.checked) this.addField(fields, element.name, element.value);
+        continue;
+      }
+      if (element instanceof HTMLSelectElement && element.multiple) {
+        this.addField(fields, element.name, Array.from(element.selectedOptions).map((option) => option.value));
+        continue;
+      }
+      this.addField(fields, element.name, element.value);
+    }
+    return { fields, files };
+  }
+
+  addField(fields, name, value) {
+    if (Object.hasOwn(fields, name)) {
+      if (!Array.isArray(fields[name])) fields[name] = [fields[name]];
+      fields[name].push(value);
+    } else {
+      fields[name] = value;
+    }
+  }
+
+  cleanHtml(html) {
+    return String(html)
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/\son[a-z]+\s*=\s*(['"]).*?\1/gi, "");
+  }
+
+  renderArtifact(info, blob) {
+    const node = document.createElement("div");
+    node.className = "event";
+    node.dataset.role = "artifact";
+    const role = document.createElement("div");
+    role.className = "role";
+    role.textContent = "FILE";
+    const content = document.createElement("div");
+    content.className = "content artifact";
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = info.name;
+    link.textContent = `${info.name} (${info.type || "application/octet-stream"}, ${info.size} bytes)`;
+    content.appendChild(link);
+    if ((info.type || "").startsWith("image/")) {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = info.name;
+      img.className = "artifact-preview";
+      content.appendChild(img);
+    } else if ((info.type || "").startsWith("video/") || (info.type || "").startsWith("audio/")) {
+      const media = document.createElement((info.type || "").startsWith("video/") ? "video" : "audio");
+      media.src = url;
+      media.controls = true;
+      media.className = "artifact-preview";
+      content.appendChild(media);
+    }
+    node.append(role, content);
+    this.transcript.appendChild(node);
+    this.transcript.scrollTop = this.transcript.scrollHeight;
+  }
+
+  renderMount(title = "Output", options = {}) {
+    const node = document.createElement("div");
+    node.className = "event";
+    node.dataset.role = "live";
+    const role = document.createElement("div");
+    role.className = "role";
+    role.textContent = "LIVE";
+    const content = document.createElement("div");
+    content.className = "content live-output";
+    const label = document.createElement("div");
+    label.className = "live-output-title";
+    label.textContent = title;
+    const root = document.createElement("div");
+    root.className = "live-output-root";
+    const width = Number(options.width || 0);
+    const height = Number(options.height || 0);
+    if (width > 0) root.style.width = `${width}px`;
+    if (height > 0) {
+      root.style.height = `${height}px`;
+      root.style.minHeight = `${height}px`;
+    }
+    content.append(label, root);
+    node.append(role, content);
+    this.transcript.appendChild(node);
+    this.transcript.scrollTop = this.transcript.scrollHeight;
+    return root;
+  }
+
+  messageNode(message) {
+    const node = document.createElement("div");
+    node.className = "event";
+    node.dataset.role = message.role;
+    node.innerHTML = `<div class="role">${this.escape(String(message.role || "").toUpperCase())}</div><div class="content"></div>`;
+    this.updateMessageNode(node, message);
+    return node;
+  }
+
+  updateMessageNode(node, message) {
+    const content = node.querySelector(".content");
+    if (!content) return;
+    content.replaceChildren();
+    if (this.isToolResult(message)) content.appendChild(this.toolResultNode(message));
+    else content.textContent = this.content(message);
+  }
+
+  isToolResult(message) {
+    const role = String(message.role || "").toLowerCase();
+    return role === "tool" || role === "toolresult" || role === "tool_result";
+  }
+
+  toolResultNode(message) {
+    const details = document.createElement("details");
+    details.className = "tool-result";
+    const summary = document.createElement("summary");
+    summary.textContent = "Tool result";
+    const pre = document.createElement("pre");
+    pre.textContent = this.content(message);
+    details.append(summary, pre);
+    return details;
+  }
+
+  content(message) {
+    if (typeof message.content === "string") return message.content;
+    if (!Array.isArray(message.content)) return message.errorMessage || "";
+    const text = message.content.map((part) => {
+      if (part.type === "text") return part.text;
+      if (part.type === "toolCall") return `tool ${part.name} ${JSON.stringify(part.arguments || {})}`;
+      if (part.type === "image") return `[image ${part.mimeType}]`;
+      return "";
+    }).filter(Boolean).join("\n");
+    return text || message.errorMessage || "";
+  }
+
+  escape(value) {
+    return String(value).replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    }[char]));
+  }
+}
+
+class WebiomeApp {
+  constructor() {
+    this.ui = new WebiomeUi();
+    this.config = {
+      endpoint: DEFAULT_ENDPOINT,
+      authToken: sessionStorage.getItem("webiome.codexToken") || "",
+    };
+    this.captureAuthRedirect();
+    this.ui.bind(this);
+    this.refreshAuth();
+    this.newSession();
+  }
+
+  captureAuthRedirect() {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const token = params.get("webiome_token");
+    if (!token) return;
+    sessionStorage.setItem("webiome.codexToken", token);
+    this.config.authToken = token;
+    history.replaceState(null, "", `${location.pathname}${location.search}`);
+  }
+
+  async refreshAuth() {
+    if (!this.config.authToken) {
+      this.ui.renderAuth({ authenticated: false });
+      return;
+    }
+    try {
+      const base = this.config.endpoint.replace(/\/api\/stream$/, "");
+      const response = await fetch(`${base}/api/auth/status`, {
+        headers: { Authorization: `Bearer ${this.config.authToken}` },
+      });
+      const state = await response.json();
+      if (!response.ok || !state.authenticated) throw new Error(state.error || "Not authenticated");
+      this.ui.renderAuth(state);
+    } catch {
+      sessionStorage.removeItem("webiome.codexToken");
+      this.config.authToken = "";
+      this.ui.renderAuth({ authenticated: false });
+    }
+  }
+
+  toggleAuth() {
+    if (this.config.authToken) {
+      sessionStorage.removeItem("webiome.codexToken");
+      this.config.authToken = "";
+      this.ui.renderAuth({ authenticated: false });
+      this.newSession();
+      return;
+    }
+    const base = this.config.endpoint.replace(/\/api\/stream$/, "");
+    const returnTo = `${location.origin}${location.pathname}${location.search}`;
+    window.open(`${base}/api/auth/start?return_to=${encodeURIComponent(returnTo)}`, "_blank", "noopener,noreferrer");
+    this.ui.setStatus("paste localhost callback URL");
+  }
+
+  async maybeCompleteAuth(text) {
+    const callback = this.extractLocalhostCallback(text);
+    if (!callback) return false;
+    this.ui.setStatus("completing sign-in");
+    try {
+      const base = this.config.endpoint.replace(/\/api\/stream$/, "");
+      const response = await fetch(`${base}/api/auth/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: callback }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok || !data.token) throw new Error(data.error || "Sign-in failed");
+      sessionStorage.setItem("webiome.codexToken", data.token);
+      this.config.authToken = data.token;
+      await this.refreshAuth();
+      this.newSession();
+      this.ui.setStatus("ready");
+    } catch (error) {
+      this.ui.setStatus(error instanceof Error ? error.message : String(error));
+    }
+    return true;
+  }
+
+  extractLocalhostCallback(text) {
+    const match = String(text).match(/https?:\/\/localhost:1455\/auth\/callback\?[^\s<>"']+/);
+    if (!match) return "";
+    try {
+      const url = new URL(match[0]);
+      if (url.searchParams.get("code") && url.searchParams.get("state")) return url.toString();
+    } catch {}
+    return "";
+  }
+
+  newSession() {
+    this.ui.clearTranscript();
+    this.session = new WebiomeSession(this.config, this.ui);
+    this.ui.renderTools(this.session.tools);
+    this.ui.render([]);
+  }
+
+  async prompt(text) {
+    await this.session.prompt(text);
+  }
+
+  abort() {
+    this.session.abort();
+  }
+
+  snapshot() {
+    return this.session.snapshot();
+  }
+}
+
+window.webiome = new WebiomeApp();
+
+    </script>
+  </body>
+</html>
