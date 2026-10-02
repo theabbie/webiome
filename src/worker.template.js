@@ -1,12 +1,18 @@
 const EXA_ENDPOINT = "https://demos.exa.ai/chatbot-demo/api/chat/stream";
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
 const DOC_MAX_CHARS = 60000;
-const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
-const CODEX_ISSUER = "https://auth.openai.com";
-const CODEX_RESPONSES_ENDPOINT = "https://chatgpt.com/backend-api/codex/responses";
-const CODEX_DEFAULT_MODEL = "gpt-5.6-luna";
-const AUTH_TOKEN_TTL_SECONDS = 50 * 60;
-const LOCAL_OAUTH_CALLBACK = "http://localhost:1455/auth/callback";
+const SIWC_ISSUER = "https://auth.openai.com";
+const SIWC_AUTH_ENDPOINT = `${SIWC_ISSUER}/api/accounts/authorize`;
+const SIWC_TOKEN_ENDPOINT = `${SIWC_ISSUER}/api/accounts/oauth/token`;
+const SIWC_JWKS_ENDPOINT = `${SIWC_ISSUER}/.well-known/jwks.json`;
+const SIWC_RESOURCE = "https://api.openai.com/v1";
+const SIWC_RESPONSES_ENDPOINT = `${SIWC_RESOURCE}/responses`;
+const SIWC_MODELS_ENDPOINT = `${SIWC_RESOURCE}/models`;
+const SIWC_DYNAMIC_CLIENT_ID = "dynamic_agent_client";
+const SIWC_SCOPES = "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct";
+const AUTH_TOKEN_TTL_SECONDS = 55 * 60;
+const REFRESH_TOKEN_TTL_SECONDS = 29 * 24 * 60 * 60;
+const LOCAL_OAUTH_CALLBACK = "http://127.0.0.1:1455/auth/callback";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -283,7 +289,7 @@ class ExaProvider {
   }
 }
 
-class CodexOAuthProvider {
+class ChatGptPlanProvider {
   constructor(auth) {
     this.auth = auth;
   }
@@ -297,25 +303,19 @@ class CodexOAuthProvider {
 
   async responses(request, signal) {
     const payload = this.payload(request);
-    const response = await this.fetchChatGptCodex(payload, signal);
-    if (response.ok) return await this.readResponse(response, "Codex");
+    const response = await this.fetchResponses(payload, signal);
+    if (response.ok) return await this.readResponse(response, "ChatGPT plan");
     const body = await response.text();
-    this.throwUpstream("Codex", response.status, body);
+    this.throwUpstream("ChatGPT plan", response.status, body);
   }
 
-  async fetchChatGptCodex(payload, signal) {
-    return await fetch(CODEX_RESPONSES_ENDPOINT, {
+  async fetchResponses(payload, signal) {
+    return await fetch(SIWC_RESPONSES_ENDPOINT, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${this.auth.accessToken}`,
         "Accept": "text/event-stream",
         "Content-Type": "application/json",
-        "OpenAI-Beta": "responses_websockets=2026-02-06",
-        ...(this.auth.accountId ? { "ChatGPT-Account-Id": this.auth.accountId } : {}),
-        "originator": "Codex CLI",
-        "x-openai-internal-codex-residency": "us",
-        "x-client-request-id": `req_${crypto.randomUUID().replace(/-/g, "")}`,
-        "x-codex-turn-state": "active",
       },
       signal,
       body: JSON.stringify(payload),
@@ -323,8 +323,8 @@ class CodexOAuthProvider {
   }
 
   async readResponse(response, label) {
-    if (response.status === 401) throw new Error(`${label} OAuth token expired or was rejected; please sign in again`);
-    if (!response.body) throw new Error("Codex returned no response stream");
+    if (response.status === 401) throw new Error(`${label} token expired or was rejected; please sign in again`);
+    if (!response.body) throw new Error(`${label} returned no response stream`);
     return await new CodexResponsesReader(response).read();
   }
 
@@ -390,12 +390,15 @@ class CodexOAuthProvider {
 
   modelId(model) {
     const requested = String(model?.id || "").trim();
-    if (!requested || requested === DEFAULT_MODEL || requested.includes("gemini")) return CODEX_DEFAULT_MODEL;
-    return requested.replace(/^openai-codex\//, "").replace(/^codex\//, "");
+    if (!requested || requested === DEFAULT_MODEL || requested.includes("gemini")) {
+      if (!this.auth.defaultModel) throw new Error("No ChatGPT plan model is available for this account");
+      return this.auth.defaultModel;
+    }
+    return requested.replace(/^openai-chatgpt\//, "").replace(/^chatgpt\//, "").replace(/^openai-codex\//, "").replace(/^codex\//, "");
   }
 
   throwUpstream(label, status, text) {
-    if (status === 401) throw new Error(`${label} OAuth token expired or was rejected; please sign in again`);
+    if (status === 401) throw new Error(`${label} token expired or was rejected; please sign in again`);
     throw new Error(`${label} upstream ${status}: ${this.errorText(text)}`);
   }
 
@@ -412,6 +415,7 @@ class CodexResponsesReader {
     this.pending = "";
     this.text = "";
     this.toolCalls = [];
+    this.pendingTools = new Map();
   }
 
   async read() {
@@ -436,27 +440,69 @@ class CodexResponsesReader {
     if (!payload || payload === "[DONE]") return;
     try {
       const data = JSON.parse(payload);
-      if (typeof data.delta === "string") this.text += data.delta;
-      else if (data.type === "response.output_text.delta" && typeof data.delta === "string") this.text += data.delta;
-      else if (typeof data.text === "string" && /output_text/.test(type || "")) this.text += data.text;
+      const eventType = data.type || type || "";
+      if (eventType === "response.output_text.delta" && typeof data.delta === "string") this.text += data.delta;
+      else if (eventType === "response.output_item.done") this.collectItem(data.item);
+      else if (eventType === "response.function_call_arguments.delta") this.collectToolDelta(data);
+      else if (eventType === "response.function_call_arguments.done") this.collectToolDone(data);
       else if (data.type === "response.completed") this.collectCompleted(data.response);
     } catch {}
   }
 
   collectCompleted(response) {
     for (const item of response?.output || []) {
-      if (item.type === "function_call") {
-        this.toolCalls.push({
-          tool: item.name,
-          arguments: this.parseArguments(item.arguments),
-          id: item.call_id || item.id,
-        });
-        continue;
-      }
+      if (item.type === "function_call") this.collectItem(item);
       for (const part of item.content || []) {
-        if (typeof part.text === "string" && !this.text.includes(part.text)) this.text += part.text;
+        if (typeof part.text === "string") this.mergeText(part.text);
       }
     }
+  }
+
+  collectItem(item) {
+    if (item?.type !== "function_call") return;
+    const id = item.call_id || item.id || crypto.randomUUID();
+    const existing = this.pendingTools.get(id) || {};
+    this.pendingTools.set(id, {
+      id,
+      tool: item.name || existing.tool || "",
+      arguments: item.arguments ?? existing.arguments ?? "",
+    });
+    this.flushTool(id);
+  }
+
+  collectToolDelta(data) {
+    const id = data.call_id || data.item_id || String(data.output_index ?? "");
+    if (!id) return;
+    const existing = this.pendingTools.get(id) || { id, tool: data.name || "", arguments: "" };
+    existing.arguments = `${existing.arguments || ""}${data.delta || ""}`;
+    this.pendingTools.set(id, existing);
+  }
+
+  collectToolDone(data) {
+    const id = data.call_id || data.item_id || String(data.output_index ?? "");
+    if (!id) return;
+    const existing = this.pendingTools.get(id) || { id, tool: data.name || "", arguments: "" };
+    if (data.arguments != null) existing.arguments = data.arguments;
+    this.pendingTools.set(id, existing);
+    this.flushTool(id);
+  }
+
+  flushTool(id) {
+    const item = this.pendingTools.get(id);
+    if (!item?.tool) return;
+    if (this.toolCalls.some((call) => call.id === id)) return;
+    this.toolCalls.push({
+      tool: item.tool,
+      arguments: this.parseArguments(item.arguments),
+      id,
+    });
+  }
+
+  mergeText(value) {
+    if (!value) return;
+    if (!this.text) this.text = value;
+    else if (this.text === value || this.text.endsWith(value)) return;
+    else if (!value.startsWith(this.text)) this.text += value;
   }
 
   parseArguments(value) {
@@ -544,6 +590,7 @@ function cors() {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Expose-Headers": "X-Webiome-Auth-Token",
   };
 }
 
@@ -565,20 +612,29 @@ function allowedReturnTo(value) {
 async function authStart(request, env) {
   const url = new URL(request.url);
   const verifier = randomToken(48);
+  const nonce = randomToken(32);
+  const hostId = validHostId(url.searchParams.get("host_id"));
+  const requestedClientId = validClientId(url.searchParams.get("client_id")) || SIWC_DYNAMIC_CLIENT_ID;
   const state = await seal({
     kind: "oauth_state",
     verifier,
+    nonce,
     redirectUri: LOCAL_OAUTH_CALLBACK,
+    hostId,
+    clientId: requestedClientId,
     returnTo: allowedReturnTo(url.searchParams.get("return_to")),
   }, env, 10 * 60);
-  const auth = new URL(`${CODEX_ISSUER}/oauth/authorize`);
+  const auth = new URL(SIWC_AUTH_ENDPOINT);
   auth.searchParams.set("response_type", "code");
-  auth.searchParams.set("client_id", CODEX_CLIENT_ID);
+  auth.searchParams.set("client_id", requestedClientId);
   auth.searchParams.set("redirect_uri", LOCAL_OAUTH_CALLBACK);
-  auth.searchParams.set("scope", "openid profile email");
+  auth.searchParams.set("scope", SIWC_SCOPES);
+  auth.searchParams.set("resource", SIWC_RESOURCE);
+  auth.searchParams.set("nonce", nonce);
+  auth.searchParams.set("agent_name_hint", "Webiome");
+  auth.searchParams.set("ext_agent_host_id", hostId);
   auth.searchParams.set("code_challenge", await codeChallenge(verifier));
   auth.searchParams.set("code_challenge_method", "S256");
-  auth.searchParams.set("id_token_add_organizations", "true");
   auth.searchParams.set("state", state);
   return Response.redirect(auth.toString(), 302);
 }
@@ -604,7 +660,7 @@ async function authComplete(request, env) {
   }
   const result = await completeOAuth(url, env);
   if (result.error) return jsonResponse({ ok: false, error: result.error }, { status: 400 });
-  return jsonResponse({ ok: true, token: result.token });
+  return jsonResponse({ ok: true, token: result.token, clientId: result.clientId || "", email: result.email || "", name: result.name || "", models: result.models || [] });
 }
 
 async function completeOAuth(url, env) {
@@ -622,72 +678,118 @@ async function completeOAuth(url, env) {
   } catch (error) {
     return { error: `Invalid OAuth state: ${error.message}` };
   }
-  if (state.kind !== "oauth_state" || !state.verifier || state.redirectUri !== LOCAL_OAUTH_CALLBACK)
+  if (state.kind !== "oauth_state" || !state.verifier || !state.nonce || state.redirectUri !== LOCAL_OAUTH_CALLBACK)
     return { error: "Invalid OAuth state payload" };
   try {
-    const tokenResponse = await fetch(`${CODEX_ISSUER}/oauth/token`, {
+    const issuedClientId = validClientId(url.searchParams.get("client_id")) || validClientId(state.clientId);
+    if (!issuedClientId || issuedClientId === SIWC_DYNAMIC_CLIENT_ID) return { error: "OpenAI did not return an issued client_id" };
+    const tokenResponse = await fetch(SIWC_TOKEN_ENDPOINT, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: { "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type: "authorization_code",
         code,
         redirect_uri: LOCAL_OAUTH_CALLBACK,
-        client_id: CODEX_CLIENT_ID,
+        client_id: issuedClientId,
         code_verifier: state.verifier,
+        resource: SIWC_RESOURCE,
       }),
     });
     const tokenData = await tokenResponse.json().catch(() => ({}));
     if (!tokenResponse.ok) throw new Error(JSON.stringify(tokenData).slice(0, 500));
     if (!tokenData.access_token) throw new Error("OAuth token response did not include access_token");
-    const claims = {
-      ...(jwtPayload(tokenData.access_token) || {}),
-      ...(jwtPayload(tokenData.id_token) || {}),
-    };
-    const account = await accountInfo(tokenData.access_token).catch(() => ({}));
+    if (!hasScope(tokenData.scope, "chatgpt.tokens.use.direct"))
+      throw new Error("ChatGPT plan usage was not granted for this sign-in");
+    const identity = await verifyIdToken(tokenData.id_token, issuedClientId, state.nonce);
     const upstreamExp = Number(jwtPayload(tokenData.access_token)?.exp || 0);
+    const models = await listChatGptModels(tokenData.access_token);
+    const defaultModel = models[0]?.slug || "";
+    if (!defaultModel) throw new Error("No ChatGPT plan models are available for this account");
     const now = Math.floor(Date.now() / 1000);
     const ttl = Math.max(60, Math.min(AUTH_TOKEN_TTL_SECONDS, upstreamExp ? upstreamExp - now - 30 : AUTH_TOKEN_TTL_SECONDS));
     const sealed = await seal({
-      kind: "codex_access",
+      kind: "siwc_access",
       accessToken: tokenData.access_token,
-      accountId: accountIdFrom(claims, tokenData, account),
-      email: claims.email || account.email || "",
-      name: claims.name || account.name || "",
-      provider: "codex-oauth",
-    }, env, ttl);
-    return { returnTo: state.returnTo, token: sealed };
+      refreshToken: tokenData.refresh_token || "",
+      clientId: issuedClientId,
+      defaultModel,
+      models,
+      scopes: String(tokenData.scope || ""),
+      email: identity.email || "",
+      name: identity.name || "",
+      subject: identity.sub || "",
+      provider: "chatgpt-plan",
+    }, env, tokenData.refresh_token ? REFRESH_TOKEN_TTL_SECONDS : ttl);
+    return { returnTo: state.returnTo, token: sealed, clientId: issuedClientId, email: identity.email || "", name: identity.name || "", models };
   } catch (error) {
     return { error: `Token exchange failed: ${error.message}` };
   }
 }
 
-function accountIdFrom(claims, tokenData, account) {
-  const nested = claims["https://api.openai.com/auth"] || {};
-  return (
-    claims.chatgpt_account_id ||
-    claims.account_id ||
-    nested.chatgpt_account_id ||
-    nested.account_id ||
-    tokenData.account_id ||
-    tokenData.chatgpt_account_id ||
-    account.account_id ||
-    account.accountId ||
-    account?.account?.id ||
-    account?.session?.account?.id ||
-    ""
-  );
+function validHostId(value) {
+  const text = String(value || "").trim();
+  if (/^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)) return text.toLowerCase();
+  return `urn:uuid:${crypto.randomUUID()}`;
 }
 
-async function accountInfo(accessToken) {
-  const response = await fetch("https://chatgpt.com/backend-api/me", {
+function validClientId(value) {
+  const text = String(value || "").trim();
+  if (text === SIWC_DYNAMIC_CLIENT_ID) return text;
+  if (/^oaiapp_[A-Za-z0-9_-]+$/.test(text)) return text;
+  return "";
+}
+
+function hasScope(scopeText, scope) {
+  return String(scopeText || "").split(/\s+/).includes(scope);
+}
+
+async function listChatGptModels(accessToken) {
+  const response = await fetch(SIWC_MODELS_ENDPOINT, {
     headers: {
       "Authorization": `Bearer ${accessToken}`,
       "Accept": "application/json",
-      "originator": "Codex CLI",
     },
   });
-  if (!response.ok) throw new Error(`Account lookup ${response.status}`);
-  return await response.json();
+  if (!response.ok) throw new Error(`Model discovery failed: ${response.status}`);
+  const data = await response.json();
+  const models = Array.isArray(data.models) ? data.models : Array.isArray(data.data) ? data.data : [];
+  return models
+    .filter((model) => !model.visibility || model.visibility === "list")
+    .map((model) => ({
+      slug: String(model.slug || model.id || "").trim(),
+      displayName: String(model.display_name || model.name || model.slug || model.id || "").trim(),
+    }))
+    .filter((model) => model.slug);
+}
+
+async function verifyIdToken(idToken, clientId, nonce) {
+  if (!idToken) throw new Error("OAuth token response did not include id_token");
+  const parts = String(idToken).split(".");
+  if (parts.length !== 3) throw new Error("Invalid id_token");
+  const header = JSON.parse(textDecoder.decode(fromBase64Url(parts[0])));
+  const claims = JSON.parse(textDecoder.decode(fromBase64Url(parts[1])));
+  const jwks = await fetch(SIWC_JWKS_ENDPOINT, { headers: { "Accept": "application/json" } }).then((response) => {
+    if (!response.ok) throw new Error(`JWKS lookup failed: ${response.status}`);
+    return response.json();
+  });
+  const jwk = (jwks.keys || []).find((key) => key.kid === header.kid);
+  if (!jwk) throw new Error("No matching OpenAI JWKS key");
+  const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+  const ok = await crypto.subtle.verify(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    fromBase64Url(parts[2]),
+    textEncoder.encode(`${parts[0]}.${parts[1]}`),
+  );
+  if (!ok) throw new Error("Invalid id_token signature");
+  const now = Math.floor(Date.now() / 1000);
+  if (claims.iss !== SIWC_ISSUER) throw new Error("Invalid id_token issuer");
+  if (claims.aud !== clientId && !(Array.isArray(claims.aud) && claims.aud.includes(clientId))) throw new Error("Invalid id_token audience");
+  if (claims.exp && claims.exp < now - 60) throw new Error("Expired id_token");
+  if (claims.nbf && claims.nbf > now + 60) throw new Error("id_token is not active yet");
+  if (claims.nonce !== nonce) throw new Error("Invalid id_token nonce");
+  if (!claims.sub) throw new Error("id_token has no subject");
+  return claims;
 }
 
 function jwtPayload(token) {
@@ -722,16 +824,21 @@ else document.body.textContent = error || "Sign-in did not complete.";
 
 async function authStatus(request, env) {
   try {
-    const auth = await authFromRequest(request, env);
-    if (!auth) return jsonResponse({ ok: false, authenticated: false });
+    const result = await authFromRequest(request, env);
+    if (!result) return jsonResponse({ ok: false, authenticated: false });
+    const { auth, token } = result;
     return jsonResponse({
       ok: true,
       authenticated: true,
-      provider: "codex-oauth",
+      provider: "chatgpt-plan",
       exp: auth.exp,
-      hasAccountId: Boolean(auth.accountId),
+      sharing: hasScope(auth.scopes, "chatgpt.tokens.use.direct"),
+      clientId: auth.clientId || "",
+      defaultModel: auth.defaultModel || "",
+      models: auth.models || [],
       email: auth.email || "",
       name: auth.name || "",
+      ...(token ? { token } : {}),
     });
   } catch (error) {
     return jsonResponse({ ok: false, authenticated: false, error: error.message }, { status: 401 });
@@ -743,8 +850,37 @@ async function authFromRequest(request, env) {
   const match = header.match(/^Bearer\s+(.+)$/i);
   if (!match) return null;
   const payload = await unseal(match[1], env);
-  if (payload.kind !== "codex_access" || !payload.accessToken) throw new Error("Invalid Webiome auth token");
-  return payload;
+  if (!["siwc_access", "codex_access"].includes(payload.kind) || !payload.accessToken) throw new Error("Invalid Webiome auth token");
+  if (payload.kind !== "siwc_access") return { auth: payload };
+  return await refreshAuthIfNeeded(payload, env);
+}
+
+async function refreshAuthIfNeeded(auth, env) {
+  const accessExp = Number(jwtPayload(auth.accessToken)?.exp || 0);
+  const now = Math.floor(Date.now() / 1000);
+  if (!accessExp || accessExp > now + 90) return { auth };
+  if (!auth.refreshToken) throw new Error("ChatGPT plan token expired; please sign in again");
+  const tokenResponse = await fetch(SIWC_TOKEN_ENDPOINT, {
+    method: "POST",
+    headers: { "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: auth.clientId,
+      refresh_token: auth.refreshToken,
+      resource: SIWC_RESOURCE,
+    }),
+  });
+  const tokenData = await tokenResponse.json().catch(() => ({}));
+  if (!tokenResponse.ok) throw new Error(`ChatGPT plan refresh failed: ${JSON.stringify(tokenData).slice(0, 300)}`);
+  if (!tokenData.access_token) throw new Error("ChatGPT plan refresh did not return access_token");
+  const refreshed = {
+    ...auth,
+    accessToken: tokenData.access_token,
+    refreshToken: tokenData.refresh_token || auth.refreshToken,
+    scopes: String(tokenData.scope || auth.scopes || ""),
+  };
+  const sealed = await seal(refreshed, env, refreshed.refreshToken ? REFRESH_TOKEN_TTL_SECONDS : AUTH_TOKEN_TTL_SECONDS);
+  return { auth: refreshed, token: sealed };
 }
 
 function textFromHtml(html) {
@@ -861,14 +997,14 @@ async function doc(request, env) {
 async function stream(request, env) {
   const body = await request.json();
   const signal = request.signal;
-  const auth = await authFromRequest(request, env).catch((error) => ({ error }));
+  const authResult = await authFromRequest(request, env).catch((error) => ({ error }));
   return new Response(new ReadableStream({
     async start(controller) {
       const writer = new PiEventWriter(controller, body.model || {});
       try {
-        if (auth?.error) throw auth.error;
-        if (auth) {
-          await new CodexOAuthProvider(auth).run(body, writer, signal);
+        if (authResult?.error) throw authResult.error;
+        if (authResult?.auth) {
+          await new ChatGptPlanProvider(authResult.auth).run(body, writer, signal);
         } else {
           writer.start();
           const plan = await new WebiomePlanner(body, new ExaProvider()).run(signal);
@@ -885,6 +1021,7 @@ async function stream(request, env) {
   }), {
     headers: {
       ...cors(),
+      ...(authResult?.token ? { "X-Webiome-Auth-Token": authResult.token } : {}),
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
     },

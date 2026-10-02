@@ -586,6 +586,8 @@ class WebiomeBridge {
         signal: options?.signal,
         body: JSON.stringify({ model, context: this.serializeContext(context) }),
       });
+      const refreshedToken = response.headers.get("X-Webiome-Auth-Token");
+      if (refreshedToken) this.config.setAuthToken?.(refreshedToken);
       if (!response.ok) throw new Error(`Webiome worker ${response.status}: ${(await response.text()).slice(0, 500)}`);
       if (!response.body) throw new Error("Webiome worker returned no stream");
       const reader = response.body.getReader();
@@ -736,16 +738,20 @@ class WebiomeUi {
     this.messageNodes = [];
     this.streamingNode = null;
     this.emptyNode = null;
+    this.events = null;
   }
 
   bind(app) {
+    this.destroy();
+    this.events = new AbortController();
+    const options = { signal: this.events.signal };
     this.app = app;
-    this.prompt.addEventListener("input", () => this.resizePrompt());
+    this.prompt.addEventListener("input", () => this.resizePrompt(), options);
     this.prompt.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
       event.preventDefault();
       this.form.requestSubmit();
-    });
+    }, options);
     this.form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const text = this.prompt.value.trim();
@@ -759,13 +765,18 @@ class WebiomeUi {
       } finally {
         if (!app.snapshot().streaming) this.setStatus("ready");
       }
-    });
-    this.newSession.addEventListener("click", () => app.newSession());
-    this.auth?.addEventListener("click", () => app.toggleAuth());
-    window.addEventListener("resize", () => this.syncToolsPanel());
+    }, options);
+    this.newSession.addEventListener("click", () => app.newSession(), options);
+    this.auth?.addEventListener("click", () => app.toggleAuth(), options);
+    window.addEventListener("resize", () => this.syncToolsPanel(), options);
     this.syncToolsPanel();
     this.resizePrompt();
     this.setStatus("ready");
+  }
+
+  destroy() {
+    this.events?.abort();
+    this.events = null;
   }
 
   setStatus(text) {
@@ -776,8 +787,8 @@ class WebiomeUi {
 
   renderAuth(state) {
     if (!this.auth) return;
-    this.auth.textContent = state.authenticated ? "SIGN OUT" : "SIGN IN";
-    this.auth.title = state.authenticated ? (state.email || state.name || "Signed in with ChatGPT") : "Sign in with ChatGPT";
+    this.auth.textContent = state.authenticated ? "SIGN OUT" : "CHATGPT";
+    this.auth.title = state.authenticated ? (state.email || state.name || "Using ChatGPT plan") : "Continue with ChatGPT";
   }
 
   async submitFromRuntime(text) {
@@ -1083,7 +1094,8 @@ class WebiomeApp {
     this.ui = new WebiomeUi();
     this.config = {
       endpoint: DEFAULT_ENDPOINT,
-      authToken: sessionStorage.getItem("webiome.codexToken") || "",
+      authToken: localStorage.getItem("webiome.codexToken") || sessionStorage.getItem("webiome.codexToken") || "",
+      setAuthToken: (token) => this.setAuthToken(token),
     };
     this.captureAuthRedirect();
     this.ui.bind(this);
@@ -1095,9 +1107,19 @@ class WebiomeApp {
     const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const token = params.get("webiome_token");
     if (!token) return;
-    sessionStorage.setItem("webiome.codexToken", token);
-    this.config.authToken = token;
+    this.setAuthToken(token);
     history.replaceState(null, "", `${location.pathname}${location.search}`);
+  }
+
+  setAuthToken(token) {
+    if (token) {
+      localStorage.setItem("webiome.codexToken", token);
+      sessionStorage.removeItem("webiome.codexToken");
+    } else {
+      localStorage.removeItem("webiome.codexToken");
+      sessionStorage.removeItem("webiome.codexToken");
+    }
+    this.config.authToken = token || "";
   }
 
   async refreshAuth() {
@@ -1112,26 +1134,39 @@ class WebiomeApp {
       });
       const state = await response.json();
       if (!response.ok || !state.authenticated) throw new Error(state.error || "Not authenticated");
+      if (state.token) this.setAuthToken(state.token);
       this.ui.renderAuth(state);
     } catch {
-      sessionStorage.removeItem("webiome.codexToken");
-      this.config.authToken = "";
+      this.setAuthToken("");
       this.ui.renderAuth({ authenticated: false });
     }
   }
 
   toggleAuth() {
     if (this.config.authToken) {
-      sessionStorage.removeItem("webiome.codexToken");
-      this.config.authToken = "";
+      this.setAuthToken("");
       this.ui.renderAuth({ authenticated: false });
       this.newSession();
       return;
     }
     const base = this.config.endpoint.replace(/\/api\/stream$/, "");
     const returnTo = `${location.origin}${location.pathname}${location.search}`;
-    window.open(`${base}/api/auth/start?return_to=${encodeURIComponent(returnTo)}`, "_blank", "noopener,noreferrer");
-    this.ui.setStatus("paste localhost callback URL");
+    const params = new URLSearchParams({
+      return_to: returnTo,
+      host_id: this.hostId(),
+    });
+    const clientId = localStorage.getItem("webiome.siwcClientId") || "";
+    if (clientId) params.set("client_id", clientId);
+    window.open(`${base}/api/auth/start?${params}`, "_blank", "noopener,noreferrer");
+    this.ui.setStatus("paste 127.0.0.1 callback URL");
+  }
+
+  hostId() {
+    const current = localStorage.getItem("webiome.hostId") || "";
+    if (/^urn:uuid:[0-9a-f-]{36}$/i.test(current)) return current.toLowerCase();
+    const value = `urn:uuid:${crypto.randomUUID()}`;
+    localStorage.setItem("webiome.hostId", value);
+    return value;
   }
 
   async maybeCompleteAuth(text) {
@@ -1147,8 +1182,8 @@ class WebiomeApp {
       });
       const data = await response.json();
       if (!response.ok || !data.ok || !data.token) throw new Error(data.error || "Sign-in failed");
-      sessionStorage.setItem("webiome.codexToken", data.token);
-      this.config.authToken = data.token;
+      this.setAuthToken(data.token);
+      if (data.clientId) localStorage.setItem("webiome.siwcClientId", data.clientId);
       await this.refreshAuth();
       this.newSession();
       this.ui.setStatus("ready");
@@ -1159,7 +1194,7 @@ class WebiomeApp {
   }
 
   extractLocalhostCallback(text) {
-    const match = String(text).match(/https?:\/\/localhost:1455\/auth\/callback\?[^\s<>"']+/);
+    const match = String(text).match(/https?:\/\/(?:127\.0\.0\.1|localhost):1455\/auth\/callback\?[^\s<>"']+/);
     if (!match) return "";
     try {
       const url = new URL(match[0]);
@@ -1186,6 +1221,12 @@ class WebiomeApp {
   snapshot() {
     return this.session.snapshot();
   }
+
+  destroy() {
+    this.session?.abort();
+    this.ui?.destroy();
+  }
 }
 
+window.webiome?.destroy?.();
 window.webiome = new WebiomeApp();
